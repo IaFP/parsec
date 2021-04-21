@@ -1,6 +1,9 @@
 -- due to Debug.Trace
 {-# LANGUAGE Trustworthy #-}
-
+{-# LANGUAGE CPP #-}
+#if __GLASGOW_HASKELL__ >= 810
+{-# LANGUAGE PartialTypeConstructors, TypeOperators #-}
+#endif
 -----------------------------------------------------------------------------
 -- |
 -- Module      :  Text.Parsec.Combinator
@@ -45,12 +48,19 @@ module Text.Parsec.Combinator
 import Control.Monad
 import Text.Parsec.Prim
 import Debug.Trace (trace)
+#if MIN_VERSION_base(4,14,0)
+import GHC.Types (Total)
+#endif
 
 -- | @choice ps@ tries to apply the parsers in the list @ps@ in order,
 -- until one of them succeeds. Returns the value of the succeeding
 -- parser.
 
-choice :: (Stream s m t) => [ParsecT s u m a] -> ParsecT s u m a
+choice :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+          ) => [ParsecT s u m a] -> ParsecT s u m a
 choice ps           = foldr (<|>) mzero ps
 
 -- | @option x p@ tries to apply parser @p@. If @p@ fails without
@@ -61,21 +71,33 @@ choice ps           = foldr (<|>) mzero ps
 -- >                          ; return (digitToInt d)
 -- >                          })
 
-option :: (Stream s m t) => a -> ParsecT s u m a -> ParsecT s u m a
+option :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+          ) => a -> ParsecT s u m a -> ParsecT s u m a
 option x p          = p <|> return x
 
 -- | @optionMaybe p@ tries to apply parser @p@.  If @p@ fails without
 -- consuming input, it return 'Nothing', otherwise it returns
 -- 'Just' the value returned by @p@.
 
-optionMaybe :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m (Maybe a)
+optionMaybe :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+               ) => ParsecT s u m a -> ParsecT s u m (Maybe a)
 optionMaybe p       = option Nothing (liftM Just p)
 
 -- | @optional p@ tries to apply parser @p@.  It will parse @p@ or nothing.
 -- It only fails if @p@ fails after consuming input. It discards the result
 -- of @p@.
 
-optional :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m ()
+optional :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => ParsecT s u m a -> ParsecT s u m ()
 optional p          = do{ _ <- p; return ()} <|> return ()
 
 -- | @between open close p@ parses @open@, followed by @p@ and @close@.
@@ -83,7 +105,11 @@ optional p          = do{ _ <- p; return ()} <|> return ()
 --
 -- >  braces  = between (symbol "{") (symbol "}")
 
-between :: (Stream s m t) => ParsecT s u m open -> ParsecT s u m close
+between :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+           ) => ParsecT s u m open -> ParsecT s u m close
             -> ParsecT s u m a -> ParsecT s u m a
 between open close p
                     = do{ _ <- open; x <- p; _ <- close; return x }
@@ -91,7 +117,11 @@ between open close p
 -- | @skipMany1 p@ applies the parser @p@ /one/ or more times, skipping
 -- its result.
 
-skipMany1 :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m ()
+skipMany1 :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+             ) => ParsecT s u m a -> ParsecT s u m ()
 skipMany1 p         = do{ _ <- p; skipMany p }
 {-
 skipMany p          = scan
@@ -104,7 +134,11 @@ skipMany p          = scan
 --
 -- >  word  = many1 letter
 
-many1 :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m [a]
+many1 :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+         ) => ParsecT s u m a -> ParsecT s u m [a]
 many1 p             = do{ x <- p; xs <- many p; return (x:xs) }
 {-
 many p              = scan id
@@ -121,13 +155,21 @@ many p              = scan id
 --
 -- >  commaSep p  = p `sepBy` (symbol ",")
 
-sepBy :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
+sepBy :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+         ) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
 sepBy p sep         = sepBy1 p sep <|> return []
 
 -- | @sepBy1 p sep@ parses /one/ or more occurrences of @p@, separated
 -- by @sep@. Returns a list of values returned by @p@.
 
-sepBy1 :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
+sepBy1 :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+          ) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
 sepBy1 p sep        = do{ x <- p
                         ; xs <- many (sep >> p)
                         ; return (x:xs)
@@ -138,7 +180,11 @@ sepBy1 p sep        = do{ x <- p
 -- separated and optionally ended by @sep@. Returns a list of values
 -- returned by @p@.
 
-sepEndBy1 :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
+sepEndBy1 :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+             ) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
 sepEndBy1 p sep     = do{ x <- p
                         ; do{ _ <- sep
                             ; xs <- sepEndBy p sep
@@ -153,14 +199,22 @@ sepEndBy1 p sep     = do{ x <- p
 --
 -- >  haskellStatements  = haskellStatement `sepEndBy` semi
 
-sepEndBy :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
+sepEndBy :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
 sepEndBy p sep      = sepEndBy1 p sep <|> return []
 
 
 -- | @endBy1 p sep@ parses /one/ or more occurrences of @p@, separated
 -- and ended by @sep@. Returns a list of values returned by @p@.
 
-endBy1 :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
+endBy1 :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+          ) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
 endBy1 p sep        = many1 (do{ x <- p; _ <- sep; return x })
 
 -- | @endBy p sep@ parses /zero/ or more occurrences of @p@, separated
@@ -168,14 +222,22 @@ endBy1 p sep        = many1 (do{ x <- p; _ <- sep; return x })
 --
 -- >   cStatements  = cStatement `endBy` semi
 
-endBy :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
+endBy :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+         ) => ParsecT s u m a -> ParsecT s u m sep -> ParsecT s u m [a]
 endBy p sep         = many (do{ x <- p; _ <- sep; return x })
 
 -- | @count n p@ parses @n@ occurrences of @p@. If @n@ is smaller or
 -- equal to zero, the parser equals to @return []@. Returns a list of
 -- @n@ values returned by @p@.
 
-count :: (Stream s m t) => Int -> ParsecT s u m a -> ParsecT s u m [a]
+count :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+         ) => Int -> ParsecT s u m a -> ParsecT s u m [a]
 count n p           | n <= 0    = return []
                     | otherwise = sequence (replicate n p)
 
@@ -185,7 +247,11 @@ count n p           | n <= 0    = return []
 -- by @p@. If there are no occurrences of @p@, the value @x@ is
 -- returned.
 
-chainr :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m (a -> a -> a) -> a -> ParsecT s u m a
+chainr :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+          ) => ParsecT s u m a -> ParsecT s u m (a -> a -> a) -> a -> ParsecT s u m a
 chainr p op x       = chainr1 p op <|> return x
 
 -- | @chainl p op x@ parses /zero/ or more occurrences of @p@,
@@ -194,7 +260,11 @@ chainr p op x       = chainr1 p op <|> return x
 -- by @p@. If there are zero occurrences of @p@, the value @x@ is
 -- returned.
 
-chainl :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m (a -> a -> a) -> a -> ParsecT s u m a
+chainl :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+          ) => ParsecT s u m a -> ParsecT s u m (a -> a -> a) -> a -> ParsecT s u m a
 chainl p op x       = chainl1 p op <|> return x
 
 -- | @chainl1 p op@ parses /one/ or more occurrences of @p@,
@@ -213,7 +283,11 @@ chainl p op x       = chainl1 p op <|> return x
 -- >  addop   =   do{ symbol "+"; return (+) }
 -- >          <|> do{ symbol "-"; return (-) }
 
-chainl1 :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m (a -> a -> a) -> ParsecT s u m a
+chainl1 :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+           ) => ParsecT s u m a -> ParsecT s u m (a -> a -> a) -> ParsecT s u m a
 chainl1 p op        = do{ x <- p; rest x }
                     where
                       rest x    = do{ f <- op
@@ -227,7 +301,11 @@ chainl1 p op        = do{ x <- p; rest x }
 -- application of all functions returned by @op@ to the values returned
 -- by @p@.
 
-chainr1 :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m (a -> a -> a) -> ParsecT s u m a
+chainr1 :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+           ) => ParsecT s u m a -> ParsecT s u m (a -> a -> a) -> ParsecT s u m a
 chainr1 p op        = scan
                     where
                       scan      = do{ x <- p; rest x }
@@ -244,7 +322,11 @@ chainr1 p op        = scan
 -- | The parser @anyToken@ accepts any kind of token. It is for example
 -- used to implement 'eof'. Returns the accepted token.
 
-anyToken :: (Stream s m t, Show t) => ParsecT s u m t
+anyToken :: (Stream s m t, Show t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => ParsecT s u m t
 anyToken            = tokenPrim show (\pos _tok _toks -> pos) Just
 
 -- | This parser only succeeds at the end of the input. This is not a
@@ -252,7 +334,11 @@ anyToken            = tokenPrim show (\pos _tok _toks -> pos) Just
 --
 -- >  eof  = notFollowedBy anyToken <?> "end of input"
 
-eof :: (Stream s m t, Show t) => ParsecT s u m ()
+eof :: (Stream s m t, Show t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+       ) => ParsecT s u m ()
 eof                 = notFollowedBy anyToken <?> "end of input"
 
 -- | @notFollowedBy p@ only succeeds when parser @p@ fails. This parser
@@ -278,7 +364,11 @@ eof                 = notFollowedBy anyToken <?> "end of input"
 -- See [haskell/parsec#8](https://github.com/haskell/parsec/issues/8)
 -- for more details.
 
-notFollowedBy :: (Stream s m t, Show a) => ParsecT s u m a -> ParsecT s u m ()
+notFollowedBy :: (Stream s m t, Show a
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+                 ) => ParsecT s u m a -> ParsecT s u m ()
 notFollowedBy p     = try (do{ c <- try p; unexpected (show c) }
                            <|> return ()
                           )
@@ -294,7 +384,11 @@ notFollowedBy p     = try (do{ c <- try p; unexpected (show c) }
 --    Note the overlapping parsers @anyChar@ and @string \"-->\"@, and
 --    therefore the use of the 'try' combinator.
 
-manyTill :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m end -> ParsecT s u m [a]
+manyTill :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => ParsecT s u m a -> ParsecT s u m end -> ParsecT s u m [a]
 manyTill p end      = scan
                     where
                       scan  = do{ _ <- end; return [] }
@@ -310,7 +404,11 @@ manyTill p end      = scan
 -- > ...
 --
 -- @since 3.1.12.0
-parserTrace :: (Show t, Stream s m t) => String -> ParsecT s u m ()
+parserTrace :: (Show t, Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+               ) => String -> ParsecT s u m ()
 parserTrace s = pt <|> return ()
     where
         pt = try $ do
@@ -331,7 +429,11 @@ parserTrace s = pt <|> return ()
 -- > ...
 --
 -- @since 3.1.12.0
-parserTraced :: (Stream s m t, Show t) => String -> ParsecT s u m b -> ParsecT s u m b
+parserTraced :: (Stream s m t, Show t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+                ) => String -> ParsecT s u m b -> ParsecT s u m b
 parserTraced s p = do
   parserTrace s
   p <|> trace (s ++ " backtracked") (fail s)

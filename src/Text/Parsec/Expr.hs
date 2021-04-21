@@ -1,6 +1,11 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+#if __GLASGOW_HASKELL__ >= 810
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE Trustworthy #-}  
+#else
 {-# LANGUAGE Safe #-}
+#endif
 
 -----------------------------------------------------------------------------
 -- |
@@ -26,6 +31,9 @@ import Data.Typeable ( Typeable )
 
 import Text.Parsec.Prim
 import Text.Parsec.Combinator
+#if MIN_VERSION_base(4,14,0)
+import GHC.Types (Total)
+#endif
 
 -----------------------------------------------------------
 -- Assoc and OperatorTable
@@ -92,7 +100,11 @@ type OperatorTable s u m a = [[Operator s u m a]]
 -- >  prefix  name fun       = Prefix (do{ reservedOp name; return fun })
 -- >  postfix name fun       = Postfix (do{ reservedOp name; return fun })
 
-buildExpressionParser :: (Stream s m t)
+buildExpressionParser :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+                         , Total m
+#endif
+                         )
                       => OperatorTable s u m a
                       -> ParsecT s u m a
                       -> ParsecT s u m a

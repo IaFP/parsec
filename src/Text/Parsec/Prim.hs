@@ -6,9 +6,14 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE PolymorphicComponents #-}
-{-# LANGUAGE Safe #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+#if __GLASGOW_HASKELL__ >= 810
+{-# LANGUAGE PartialTypeConstructors, TypeOperators #-}
+{-# LANGUAGE Trustworthy #-}
+#else
+{-# LANGUAGE Safe #-}
+#endif
 
 {-# OPTIONS_GHC -fno-warn-name-shadowing #-}
 
@@ -111,6 +116,9 @@ import Control.Monad.Error.Class
 
 import Text.Parsec.Pos
 import Text.Parsec.Error
+#if MIN_VERSION_base(4,14,0)
+import GHC.Types (type (@@), Total)
+#endif
 
 unknownError :: State s u -> ParseError
 unknownError state        = newErrorUnknown (statePos state)
@@ -140,6 +148,9 @@ unexpected msg
 
 newtype ParsecT s u m a
     = ParsecT {unParser :: forall b .
+#if MIN_VERSION_base(4,14,0)
+                 Total m => 
+#endif
                  State s u
               -> (a -> State s u -> ParseError -> m b) -- consumed ok
               -> (ParseError -> m b)                   -- consumed err
@@ -152,10 +163,17 @@ newtype ParsecT s u m a
      -- GHC 7.6 doesn't like deriving instances of Typeabl1 for types with
      -- non-* type-arguments.
 #endif
+#if MIN_VERSION_base(4,14,0)
+instance Total (ParsecT s u m)
+#endif
 
 -- | Low-level unpacking of the ParsecT type. To run your parser, please look to
 -- runPT, runP, runParserT, runParser and other such functions.
-runParsecT :: Monad m => ParsecT s u m a -> State s u -> m (Consumed (m (Reply s u a)))
+runParsecT :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+              , Total m
+#endif
+              ) => ParsecT s u m a -> State s u -> m (Consumed (m (Reply s u a)))
 runParsecT p s = unParser p s cok cerr eok eerr
     where cok a s' err = return . Consumed . return $ Ok a s' err
           cerr err = return . Consumed . return $ Error err
@@ -163,7 +181,11 @@ runParsecT p s = unParser p s cok cerr eok eerr
           eerr err = return . Empty . return $ Error err
 
 -- | Low-level creation of the ParsecT type. You really shouldn't have to do this.
-mkPT :: Monad m => (State s u -> m (Consumed (m (Reply s u a)))) -> ParsecT s u m a
+mkPT :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+        , Total m
+#endif 
+        ) => (State s u -> m (Consumed (m (Reply s u a)))) -> ParsecT s u m a
 mkPT k = ParsecT $ \s cok cerr eok eerr -> do
            cons <- k s
            case cons of
@@ -212,7 +234,11 @@ data State s u = State {
 -- @
 --
 -- @since 3.1.12
-instance Semigroup.Semigroup a => Semigroup.Semigroup (ParsecT s u m a) where
+instance( Semigroup.Semigroup a
+#if MIN_VERSION_base(4,14,0)
+         , Total m
+#endif
+         ) => Semigroup.Semigroup (ParsecT s u m a) where
     -- | Combines two parsers like '*>', '>>' and @do {...;...}@
     --  /but/ also combines their results with (<>) instead of
     --  discarding the first.
@@ -231,6 +257,9 @@ instance Semigroup.Semigroup a => Semigroup.Semigroup (ParsecT s u m a) where
 -- @since 3.1.12
 instance ( Monoid.Monoid a
          , Semigroup.Semigroup (ParsecT s u m a)
+#if MIN_VERSION_base(4,14,0)
+         , Total m
+#endif
          ) => Monoid.Monoid (ParsecT s u m a) where
     -- | A parser that always succeeds, consumes no input, and
     --  returns the underlying 'Monoid''s 'mempty' value
@@ -257,17 +286,29 @@ parsecMap f p
     = ParsecT $ \s cok cerr eok eerr ->
       unParser p s (cok . f) cerr (eok . f) eerr
 
-instance Applicative.Applicative (ParsecT s u m) where
+instance
+#if MIN_VERSION_base(4,14,0)
+         Total m => 
+#endif
+  Applicative.Applicative (ParsecT s u m) where
     pure = parserReturn
     (<*>) = ap -- TODO: Can this be optimized?
     p1 *> p2 = p1 `parserBind` const p2
     p1 <* p2 = do { x1 <- p1 ; void p2 ; return x1 }
 
-instance Applicative.Alternative (ParsecT s u m) where
+instance
+#if MIN_VERSION_base(4,14,0)
+         Total m => 
+#endif
+  Applicative.Alternative (ParsecT s u m) where
     empty = mzero
     (<|>) = mplus
 
-instance Monad (ParsecT s u m) where
+instance
+#if MIN_VERSION_base(4,14,0)
+    Total m => 
+#endif
+  Monad (ParsecT s u m) where
     return = Applicative.pure
     p >>= f = parserBind p f
     (>>) = (Applicative.*>)
@@ -276,30 +317,54 @@ instance Monad (ParsecT s u m) where
 #endif
 
 -- | @since 3.1.12.0
-instance Fail.MonadFail (ParsecT s u m) where
+instance
+#if MIN_VERSION_base(4,14,0)
+    Total m => 
+#endif
+  Fail.MonadFail (ParsecT s u m) where
     fail = parserFail
 
-instance (MonadIO m) => MonadIO (ParsecT s u m) where
+instance (MonadIO m
+#if MIN_VERSION_base(4,14,0)
+         , Total m
+#endif
+         ) => MonadIO (ParsecT s u m) where
     liftIO = lift . liftIO
 
-instance (MonadReader r m) => MonadReader r (ParsecT s u m) where
+instance (MonadReader r m
+#if MIN_VERSION_base(4,14,0)
+         , Total m
+#endif
+         ) => MonadReader r (ParsecT s u m) where
     ask = lift ask
     local f p = mkPT $ \s -> local f (runParsecT p s)
 
 -- I'm presuming the user might want a separate, non-backtracking
 -- state aside from the Parsec user state.
-instance (MonadState s m) => MonadState s (ParsecT s' u m) where
+instance (MonadState s m
+#if MIN_VERSION_base(4,14,0)
+         , Total m
+#endif
+         ) => MonadState s (ParsecT s' u m) where
     get = lift get
     put = lift . put
 
-instance (MonadCont m) => MonadCont (ParsecT s u m) where
+instance (MonadCont m
+#if MIN_VERSION_base(4,14,0)
+         , Total m
+#endif
+         ) => MonadCont (ParsecT s u m) where
     callCC f = mkPT $ \s ->
           callCC $ \c ->
           runParsecT (f (\a -> mkPT $ \s' -> c (pack s' a))) s
 
      where pack s a= Empty $ return (Ok a s (unknownError s))
 
-instance (MonadError e m) => MonadError e (ParsecT s u m) where
+instance (MonadError e m
+#if MIN_VERSION_base(4,14,0)
+         , Total m
+#endif
+         ) => MonadError e (ParsecT s u m) where
     throwError = lift . throwError
     p `catchError` h = mkPT $ \s ->
         runParsecT p s `catchError` \e ->
@@ -361,7 +426,11 @@ parserFail msg
     = ParsecT $ \s _ _ _ eerr ->
       eerr $ newErrorMessage (Message msg) (statePos s)
 
-instance MonadPlus (ParsecT s u m) where
+instance
+#if MIN_VERSION_base(4,14,0)
+         Total m => 
+#endif
+  MonadPlus (ParsecT s u m) where
     mzero = parserZero
     mplus p1 p2 = parserPlus p1 p2
 
@@ -421,7 +490,11 @@ p <?> msg = label p msg
 -- implementation of the parser combinators and the generation of good
 -- error messages.
 
-(<|>) :: (ParsecT s u m a) -> (ParsecT s u m a) -> (ParsecT s u m a)
+(<|>) ::
+#if MIN_VERSION_base(4,14,0)
+         Total m => 
+#endif
+         (ParsecT s u m a) -> (ParsecT s u m a) -> (ParsecT s u m a)
 p1 <|> p2 = mplus p1 p2
 
 -- | A synonym for @\<?>@, but as a function instead of an operator.
@@ -480,7 +553,11 @@ instance (Monad m) => Stream TextL.Text m Char where
     {-# INLINE uncons #-}
 
 
-tokens :: (Stream s m t, Eq t)
+tokens :: (Stream s m t, Eq t
+#if MIN_VERSION_base(4,14,0)
+         , Total m
+#endif
+          )
        => ([t] -> String)      -- Pretty print a list of tokens
        -> (SourcePos -> [t] -> SourcePos)
        -> [t]                  -- List of tokens to parse
@@ -609,7 +686,11 @@ token showToken tokpos test = tokenPrim showToken nextpos test
 -- >      testChar x        = if x == c then Just x else Nothing
 -- >      nextPos pos x xs  = updatePosChar pos x
 
-tokenPrim :: (Stream s m t)
+tokenPrim :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+             , Total m
+#endif
+             )
           => (t -> String)                      -- ^ Token pretty-printing function.
           -> (SourcePos -> t -> s -> SourcePos) -- ^ Next position calculating function.
           -> (t -> Maybe a)                     -- ^ Matching function for the token to parse.
@@ -617,12 +698,15 @@ tokenPrim :: (Stream s m t)
 {-# INLINE tokenPrim #-}
 tokenPrim showToken nextpos test = tokenPrimEx showToken nextpos Nothing test
 
-tokenPrimEx :: (Stream s m t)
-            => (t -> String)
-            -> (SourcePos -> t -> s -> SourcePos)
-            -> Maybe (SourcePos -> t -> s -> u -> u)
-            -> (t -> Maybe a)
-            -> ParsecT s u m a
+tokenPrimEx :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+               , Total m
+#endif
+           ) => (t -> String)
+             -> (SourcePos -> t -> s -> SourcePos)
+             -> Maybe (SourcePos -> t -> s -> u -> u)
+             -> (t -> Maybe a)
+             -> ParsecT s u m a
 {-# INLINE tokenPrimEx #-}
 tokenPrimEx showToken nextpos Nothing test
   = ParsecT $ \(State input pos user) cok _cerr _eok eerr -> do
@@ -662,7 +746,11 @@ unexpectError msg pos = newErrorMessage (SysUnExpect msg) pos
 -- >                  ; return (c:cs)
 -- >                  }
 
-many :: ParsecT s u m a -> ParsecT s u m [a]
+many ::
+#if MIN_VERSION_base(4,14,0)
+         Total m => 
+#endif
+  ParsecT s u m a -> ParsecT s u m [a]
 many p
   = do xs <- manyAccum (:) p
        return (reverse xs)
@@ -672,12 +760,20 @@ many p
 --
 -- >  spaces  = skipMany space
 
-skipMany :: ParsecT s u m a -> ParsecT s u m ()
+skipMany ::
+#if MIN_VERSION_base(4,14,0)
+         Total m => 
+#endif
+  ParsecT s u m a -> ParsecT s u m ()
 skipMany p
   = do _ <- manyAccum (\_ _ -> []) p
        return ()
 
-manyAccum :: (a -> [a] -> [a])
+manyAccum ::
+#if MIN_VERSION_base(4,14,0)
+       m @@ Consumed (m (Reply s u a)) => 
+#endif
+  (a -> [a] -> [a])
           -> ParsecT s u m a
           -> ParsecT s u m [a]
 manyAccum acc p =
@@ -696,7 +792,11 @@ manyErr = error "Text.ParserCombinators.Parsec.Prim.many: combinator 'many' is a
 
 -- < Running a parser: monadic (runPT) and pure (runP)
 
-runPT :: (Stream s m t)
+runPT :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+        , Total m
+#endif
+         )
       => ParsecT s u m a -> u -> SourceName -> s -> m (Either ParseError a)
 runPT p u name s
     = do res <- runParsecT p (State s (initialPos name) u)
@@ -721,7 +821,11 @@ runP p u name s = runIdentity $ runPT p u name s
 -- string. Returns a computation in the underlying monad @m@ that return either a 'ParseError' ('Left') or a
 -- value of type @a@ ('Right').
 
-runParserT :: (Stream s m t)
+runParserT :: (Stream s m t
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+              )
            => ParsecT s u m a -> u -> SourceName -> s -> m (Either ParseError a)
 runParserT = runPT
 
@@ -772,19 +876,31 @@ parseTest p input
 
 -- | Returns the current source position. See also 'SourcePos'.
 
-getPosition :: (Monad m) => ParsecT s u m SourcePos
+getPosition :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+               , Total m
+#endif
+               ) => ParsecT s u m SourcePos
 getPosition = do state <- getParserState
                  return (statePos state)
 
 -- | Returns the current input
 
-getInput :: (Monad m) => ParsecT s u m s
+getInput :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => ParsecT s u m s
 getInput = do state <- getParserState
               return (stateInput state)
 
 -- | @setPosition pos@ sets the current source position to @pos@.
 
-setPosition :: (Monad m) => SourcePos -> ParsecT s u m ()
+setPosition :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+               ) => SourcePos -> ParsecT s u m ()
 setPosition pos
     = do _ <- updateParserState (\(State input _ user) -> State input pos user)
          return ()
@@ -793,7 +909,11 @@ setPosition pos
 -- @setInput@ functions can for example be used to deal with #include
 -- files.
 
-setInput :: (Monad m) => s -> ParsecT s u m ()
+setInput :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => s -> ParsecT s u m ()
 setInput input
     = do _ <- updateParserState (\(State _ pos user) -> State input pos user)
          return ()
@@ -820,12 +940,20 @@ updateParserState f =
 
 -- | Returns the current user state.
 
-getState :: (Monad m) => ParsecT s u m u
+getState :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => ParsecT s u m u
 getState = stateUser `liftM` getParserState
 
 -- | @putState st@ set the user state to @st@.
 
-putState :: (Monad m) => u -> ParsecT s u m ()
+putState :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => u -> ParsecT s u m ()
 putState u = do _ <- updateParserState $ \s -> s { stateUser = u }
                 return ()
 
@@ -838,7 +966,11 @@ putState u = do _ <- updateParserState $ \s -> s { stateUser = u }
 -- >            ; return (Id x)
 -- >            }
 
-modifyState :: (Monad m) => (u -> u) -> ParsecT s u m ()
+modifyState :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+               , Total m
+#endif
+               ) => (u -> u) -> ParsecT s u m ()
 modifyState f = do _ <- updateParserState $ \s -> s { stateUser = f (stateUser s) }
                    return ()
 
@@ -846,10 +978,18 @@ modifyState f = do _ <- updateParserState $ \s -> s { stateUser = f (stateUser s
 
 -- | An alias for putState for backwards compatibility.
 
-setState :: (Monad m) => u -> ParsecT s u m ()
+setState :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+            ) => u -> ParsecT s u m ()
 setState = putState
 
 -- | An alias for modifyState for backwards compatibility.
 
-updateState :: (Monad m) => (u -> u) -> ParsecT s u m ()
+updateState :: (Monad m
+#if MIN_VERSION_base(4,14,0)
+            , Total m
+#endif
+               ) => (u -> u) -> ParsecT s u m ()
 updateState = modifyState

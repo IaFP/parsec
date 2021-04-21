@@ -9,3 +9,4 @@
 *~
 ghc.mk
 GNUmakefile
+*.hs.bak

@@ -2,7 +2,12 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PolymorphicComponents #-}
+#if __GLASGOW_HASKELL__ >= 810
+{-# LANGUAGE PartialTypeConstructors, TypeOperators #-}
+{-# LANGUAGE Trustworthy #-}
+#else
 {-# LANGUAGE Safe #-}
+#endif
 
 -----------------------------------------------------------------------------
 -- |
@@ -38,6 +43,9 @@ import Control.Monad.Identity
 import Text.Parsec.Prim
 import Text.Parsec.Char
 import Text.Parsec.Combinator
+#if MIN_VERSION_base(4,14,0)
+import GHC.Types(Total)
+#endif
 
 -----------------------------------------------------------
 -- Language Definition
@@ -355,8 +363,11 @@ data GenTokenParser s u m
 -- >  reserved    = P.reserved lexer
 -- >  ...
 
-makeTokenParser :: (Stream s m Char)
-                => GenLanguageDef s u m -> GenTokenParser s u m
+makeTokenParser :: (Stream s m Char
+#if MIN_VERSION_base(4,14,0)
+                         , Total m
+#endif
+                ) => GenLanguageDef s u m -> GenTokenParser s u m
 makeTokenParser languageDef
     = TokenParser{ identifier = identifier
                  , reserved = reserved
