@@ -3,7 +3,12 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE StandaloneDeriving #-}
+#if __GLASGOW_HASKELL__ >= 810
+{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE PartialTypeConstructors, TypeFamilies, TypeOperators #-}
+#else
 {-# LANGUAGE Safe #-}
+#endif
 
 -----------------------------------------------------------------------------
 -- |
@@ -49,6 +54,10 @@ import Data.Typeable ( Typeable )
 #else
 -- For GHC 7.6
 import Data.Typeable ( Typeable3 )
+#endif
+
+#if MIN_VERSION_base(4,14,0)
+import GHC.Types(type(@@))
 #endif
 
 infixl 1 <||>, <|?>
@@ -151,6 +160,17 @@ data StreamBranch s st a = forall b. Branch (StreamPermParser s st (b -> a)) (Pa
 #else
 deriving instance Typeable3 StreamBranch
 #endif
+
+#if MIN_VERSION_base(4,14,0)
+type instance StreamPermParser @@ s = ()
+type instance StreamPermParser s @@ st = ()
+type instance StreamPermParser s st @@ a = ()
+
+type instance StreamBranch @@ s = ()
+type instance StreamBranch s @@ st = ()
+type instance StreamBranch s st @@ a = ()
+#endif
+
 
 -- | The parser @permute perm@ parses a permutation of parser described
 -- by @perm@. For example, suppose we want to parse a permutation of:
