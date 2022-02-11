@@ -97,6 +97,8 @@ library
 
         if impl(ghc >= 7.10)
             ghc-options: -fno-warn-trustworthy-safe
+  if impl(ghc >= 9.3)
+    build-depends: ghc-prim
 
 test-suite parsec.
     type: exitcode-stdio-1.0
