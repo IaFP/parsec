@@ -57,7 +57,7 @@ import GHC.Types (Total)
 -- until one of them succeeds. Returns the value of the succeeding
 -- parser.
 
-choice :: (
+choice :: forall s u m a t. (
 #if MIN_VERSION_base(4,16,0)
         Total m,
 #endif

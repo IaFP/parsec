@@ -148,7 +148,11 @@ unexpected msg
 -- If this is undesirable, simply use a data type like @data Box a = Box a@ and
 -- the state type @Box YourStateType@ to add a level of indirection.
 
-newtype ParsecT s u m a
+newtype
+-- #if MIN_VERSION_base(4,16,0)
+--   m @ a => -- Should work but doesn't
+-- #endif
+  ParsecT s u m a
     = ParsecT {unParser :: forall b .
 #if MIN_VERSION_base(4,16,0)
                  Total m => 
