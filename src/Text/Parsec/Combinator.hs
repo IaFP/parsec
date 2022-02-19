@@ -2,7 +2,7 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE CPP #-}
 #if __GLASGOW_HASKELL__ >= 903
-{-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE QuantifiedConstraints, RankNTypes #-}
 #endif
 
 -----------------------------------------------------------------------------
@@ -57,7 +57,7 @@ import GHC.Types (Total)
 -- until one of them succeeds. Returns the value of the succeeding
 -- parser.
 
-choice :: forall s u m a t. (
+choice :: (
 #if MIN_VERSION_base(4,16,0)
         Total m,
 #endif
