@@ -136,7 +136,11 @@ sysUnExpectError msg pos  = Error (newErrorMessage (SysUnExpect msg) pos)
 -- used. For an example of the use of @unexpected@, see the definition
 -- of 'Text.Parsec.Combinator.notFollowedBy'.
 
-unexpected :: (Stream s m t) => String -> ParsecT s u m a
+unexpected :: (
+#if MIN_VERSION_base(4,16,0)
+    Total m,
+#endif
+  Stream s m t) => String -> ParsecT s u m a
 unexpected msg
     = ParsecT $ \s _ _ _ eerr ->
       eerr $ newErrorMessage (UnExpect msg) (statePos s)
@@ -148,14 +152,18 @@ unexpected msg
 -- If this is undesirable, simply use a data type like @data Box a = Box a@ and
 -- the state type @Box YourStateType@ to add a level of indirection.
 
-newtype
+data
 -- #if MIN_VERSION_base(4,16,0)
 --   m @ a => -- Should work but doesn't
 -- #endif
   ParsecT s u m a
-    = ParsecT {unParser :: forall b .
+    =
 #if MIN_VERSION_base(4,16,0)
-                 Total m => 
+    Total m => 
+#endif
+  ParsecT {unParser :: forall b .
+#if MIN_VERSION_base(4,16,0)
+                 (m @ b) => 
 #endif
                  State s u
               -> (a -> State s u -> ParseError -> m b) -- consumed ok
@@ -284,10 +292,18 @@ instance Functor (Reply s u) where
     fmap f (Ok x s e) = Ok (f x) s e
     fmap _ (Error e) = Error e -- XXX
 
-instance Functor (ParsecT s u m) where
+instance
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+  Functor (ParsecT s u m) where
     fmap f p = parsecMap f p
 
-parsecMap :: (a -> b) -> ParsecT s u m a -> ParsecT s u m b
+parsecMap ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+  (a -> b) -> ParsecT s u m a -> ParsecT s u m b
 parsecMap f p
     = ParsecT $ \s cok cerr eok eerr ->
       unParser p s (cok . f) cerr (eok . f) eerr
@@ -376,7 +392,11 @@ instance (
         runParsecT p s `catchError` \e ->
             runParsecT (h e) s
 
-parserReturn :: a -> ParsecT s u m a
+parserReturn ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+      a -> ParsecT s u m a
 parserReturn x
     = ParsecT $ \s _ _ eok _ ->
       eok x s (unknownError s)
@@ -431,7 +451,11 @@ mergeErrorReply err1 reply -- XXX where to put it?
         Ok x state err2 -> Ok x state (mergeError err1 err2)
         Error err2      -> Error (mergeError err1 err2)
 
-parserFail :: String -> ParsecT s u m a
+parserFail ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+     String -> ParsecT s u m a
 parserFail msg
     = ParsecT $ \s _ _ _ eerr ->
       eerr $ newErrorMessage (Message msg) (statePos s)
@@ -448,12 +472,20 @@ instance
 -- equal to the 'mzero' member of the 'MonadPlus' class and to the 'Control.Applicative.empty' member
 -- of the 'Control.Applicative.Alternative' class.
 
-parserZero :: ParsecT s u m a
+parserZero ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+     ParsecT s u m a
 parserZero
     = ParsecT $ \s _ _ _ eerr ->
       eerr $ unknownError s
 
-parserPlus :: ParsecT s u m a -> ParsecT s u m a -> ParsecT s u m a
+parserPlus ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+  ParsecT s u m a -> ParsecT s u m a -> ParsecT s u m a
 {-# INLINE parserPlus #-}
 parserPlus m n
     = ParsecT $ \s cok cerr eok eerr ->
@@ -485,7 +517,11 @@ infixr 1 <|>
 -- combinator, the message would be like '...: expecting \"let\" or
 -- letter', which is less friendly.
 
-(<?>) :: (ParsecT s u m a) -> String -> (ParsecT s u m a)
+(<?>) ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+   (ParsecT s u m a) -> String -> (ParsecT s u m a)
 p <?> msg = label p msg
 
 -- | This combinator implements choice. The parser @p \<|> q@ first
@@ -508,11 +544,19 @@ p <?> msg = label p msg
 p1 <|> p2 = mplus p1 p2
 
 -- | A synonym for @\<?>@, but as a function instead of an operator.
-label :: ParsecT s u m a -> String -> ParsecT s u m a
+label ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+  ParsecT s u m a -> String -> ParsecT s u m a
 label p msg
   = labels p [msg]
 
-labels :: ParsecT s u m a -> [String] -> ParsecT s u m a
+labels ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+  ParsecT s u m a -> [String] -> ParsecT s u m a
 labels p msgs =
     ParsecT $ \s cok cerr eok eerr ->
     let eok' x s' error = eok x s' $ if errorIsUnknown error
@@ -635,7 +679,11 @@ tokens showTokens nextposs tts@(tok:toks)
 -- >  letExpr     = do{ try (string "let"); ... }
 -- >  identifier  = many1 letter
 
-try :: ParsecT s u m a -> ParsecT s u m a
+try ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+  ParsecT s u m a -> ParsecT s u m a
 try p =
     ParsecT $ \s cok _ eok eerr ->
     unParser p s cok eerr eok eerr
@@ -645,7 +693,11 @@ try p =
 -- If @p@ fails and consumes some input, so does @lookAhead@. Combine with 'try'
 -- if this is undesirable.
 
-lookAhead :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m a
+lookAhead ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+  (Stream s m t) => ParsecT s u m a -> ParsecT s u m a
 lookAhead p =
     ParsecT $ \s _ cerr eok eerr -> do
         let eok' a _ _ = eok a s (newErrorUnknown (statePos s))
@@ -783,7 +835,7 @@ skipMany p
 
 manyAccum ::
 #if MIN_VERSION_base(4,16,0)
-       m @ Consumed (m (Reply s u a)) => 
+    Total m => 
 #endif
           (a -> [a] -> [a])
           -> ParsecT s u m a
@@ -933,17 +985,29 @@ setInput input
 
 -- | Returns the full parser state as a 'State' record.
 
-getParserState :: (Monad m) => ParsecT s u m (State s u)
+getParserState :: (
+#if MIN_VERSION_base(4,16,0)
+    Total m,
+#endif
+  Monad m) => ParsecT s u m (State s u)
 getParserState = updateParserState id
 
 -- | @setParserState st@ set the full parser state to @st@.
 
-setParserState :: (Monad m) => State s u -> ParsecT s u m (State s u)
+setParserState :: (
+#if MIN_VERSION_base(4,16,0)
+    Total m, 
+#endif
+    Monad m) => State s u -> ParsecT s u m (State s u)
 setParserState st = updateParserState (const st)
 
 -- | @updateParserState f@ applies function @f@ to the parser state.
 
-updateParserState :: (State s u -> State s u) -> ParsecT s u m (State s u)
+updateParserState ::
+#if MIN_VERSION_base(4,16,0)
+    Total m => 
+#endif
+      (State s u -> State s u) -> ParsecT s u m (State s u)
 updateParserState f =
     ParsecT $ \s _ _ eok _ ->
     let s' = f s
