@@ -152,20 +152,9 @@ unexpected msg
 -- If this is undesirable, simply use a data type like @data Box a = Box a@ and
 -- the state type @Box YourStateType@ to add a level of indirection.
 
-data
--- #if MIN_VERSION_base(4,16,0)
---   m @ a => -- Should work but doesn't
--- #endif
-  ParsecT s u m a
-    =
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-  ParsecT {unParser :: forall b .
-#if MIN_VERSION_base(4,16,0)
-                 (m @ b) => 
-#endif
-                 State s u
+data ParsecT s u m a
+    = ParsecT {unParser :: forall b .
+                State s u
               -> (a -> State s u -> ParseError -> m b) -- consumed ok
               -> (ParseError -> m b)                   -- consumed err
               -> (a -> State s u -> ParseError -> m b) -- empty ok
@@ -180,11 +169,7 @@ data
 
 -- | Low-level unpacking of the ParsecT type. To run your parser, please look to
 -- runPT, runP, runParserT, runParser and other such functions.
-runParsecT :: (
-#if MIN_VERSION_base(4,16,0)
-        Total m,
-#endif
-  Monad m) => ParsecT s u m a -> State s u -> m (Consumed (m (Reply s u a)))
+runParsecT :: Monad m => ParsecT s u m a -> State s u -> m (Consumed (m (Reply s u a)))
 {-# INLINABLE runParsecT #-}
 runParsecT p s = unParser p s cok cerr eok eerr
     where cok a s' err = return . Consumed . return $ Ok a s' err
