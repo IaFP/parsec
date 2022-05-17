@@ -33,7 +33,7 @@ import Data.Typeable ( Typeable )
 import Text.Parsec.Prim
 import Text.Parsec.Combinator
 #if MIN_VERSION_base(4,16,0)
-import GHC.Types (type (@), Total)
+import GHC.Types (type (@))
 #endif
 
 -----------------------------------------------------------
@@ -101,11 +101,7 @@ type OperatorTable s u m a = [[Operator s u m a]]
 -- >  prefix  name fun       = Prefix (do{ reservedOp name; return fun })
 -- >  postfix name fun       = Postfix (do{ reservedOp name; return fun })
 
-buildExpressionParser :: (
-#if MIN_VERSION_base(4,16,0)
-                        Total m, m @ a,
-#endif
-                         Stream s m t)
+buildExpressionParser :: (Stream s m t)
                       => OperatorTable s u m a
                       -> ParsecT s u m a
                       -> ParsecT s u m a
@@ -114,8 +110,7 @@ buildExpressionParser operators simpleExpr
     = foldl (makeParser) simpleExpr operators
     where
 #if MIN_VERSION_base(4,16,0)
-      makeParser :: (Total m,
-                     t @ Operator s u m b, Foldable t,
+      makeParser :: (t @ Operator s u m b, Foldable t,
                                   Stream s m t2, Stream s m t3, Stream s m t4,
                                   Stream s m t5, Stream s m t6) =>
                                  ParsecT s u m b
@@ -131,9 +126,6 @@ buildExpressionParser operators simpleExpr
               prefixOp   = choice prefix  <?> ""
               postfixOp  = choice postfix <?> ""
 
-#if MIN_VERSION_base(4,16,0)
-              ambiguous :: Total m2 => [Char] -> ParsecT s2 u2 m2 a1 -> ParsecT s2 u2 m2 a2
-#endif                        
               ambiguous assoc op= try $
                                   do{ _ <- op; fail ("ambiguous use of a " ++ assoc
                                                      ++ " associative operator")

@@ -44,9 +44,6 @@ import Control.Monad.Identity
 import Text.Parsec.Prim
 import Text.Parsec.Char
 import Text.Parsec.Combinator
-#if MIN_VERSION_base(4,16,0)
-import GHC.Types (Total)
-#endif
 
 -----------------------------------------------------------
 -- Language Definition
@@ -364,11 +361,7 @@ data GenTokenParser s u m
 -- >  reserved    = P.reserved lexer
 -- >  ...
 
-makeTokenParser :: (
-#if MIN_VERSION_base(4,16,0)
-  Total m,
-#endif
-  Stream s m Char)
+makeTokenParser :: (Stream s m Char)
                 => GenLanguageDef s u m -> GenTokenParser s u m
 {-# INLINABLE makeTokenParser #-}
 makeTokenParser languageDef
@@ -489,19 +482,10 @@ makeTokenParser languageDef
 
     charEsc         = choice (map parseEsc escMap)
                     where
-#if MIN_VERSION_base(4,16,0)
-                      parseEsc :: (Total m, Stream s m Char) => (Char, b) -> ParsecT s u m b
-#endif
                       parseEsc (c,code)     = do{ _ <- char c; return code }
     
-#if MIN_VERSION_base(4,16,0)
-    charAscii :: (Total m, Stream s m Char) => ParsecT s u1 m Char
-#endif
     charAscii       = choice (map parseAscii asciiMap)
                     where
-#if MIN_VERSION_base(4,16,0)
-                      parseAscii :: (Total m2, Stream s2 m2 Char) => (String, a) -> ParsecT s2 u2 m2 a
-#endif
                       parseAscii (asc,code) = try (do{ _ <- string asc; return code })
 
 
@@ -568,9 +552,6 @@ makeTokenParser languageDef
                         ; readDouble (show n ++ expo)
                         }
                       where
-#if MIN_VERSION_base(4,16,0)
-                        readDouble :: (Total m1, Read a2) => String -> ParsecT s1 u2 m1 a2
-#endif
                         readDouble s =
                           case reads s of
                             [(x, "")] -> return x
@@ -612,9 +593,6 @@ makeTokenParser languageDef
     octal           = do{ _ <- oneOf "oO"; number 8 octDigit  }
 
 
-#if MIN_VERSION_base(4,16,0)
-    number :: (Total m1, Stream s1 m1 t) => Integer -> ParsecT s1 u1 m1 Char -> ParsecT s1 u1 m1 Integer
-#endif
     number base baseDigit
         = do{ digits <- many1 baseDigit
             ; let n = foldl (\x d -> base*x + toInteger (digitToInt d)) 0 digits
@@ -657,21 +635,12 @@ makeTokenParser languageDef
         do{ _ <- caseString name
           ; notFollowedBy (identLetter languageDef) <?> ("end of " ++ show name)
           }
-#if MIN_VERSION_base(4,16,0)
-    caseString :: (Total m1, Stream s1 m1 Char) => String -> ParsecT s1 u1 m1 String
-#endif
     caseString name
         | caseSensitive languageDef  = string name
         | otherwise               = do{ walk name; return name }
         where
-#if MIN_VERSION_base(4,16,0)
-          walk ::  (Total m2, Stream s2 m2 Char) => [Char] -> ParsecT s2 u2 m2 ()
-#endif                
           walk []     = return ()
           walk (c:cs) = do{ _ <- caseChar c <?> msg; walk cs }
-#if MIN_VERSION_base(4,16,0)
-          caseChar :: (Total m2, Stream s2 m2 Char) => Char -> ParsecT s2 u2 m2 Char
-#endif                   
           caseChar c  | isAlpha c  = char (toLower c) <|> char (toUpper c)
                       | otherwise  = char c
 
