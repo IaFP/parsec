@@ -136,11 +136,7 @@ sysUnExpectError msg pos  = Error (newErrorMessage (SysUnExpect msg) pos)
 -- used. For an example of the use of @unexpected@, see the definition
 -- of 'Text.Parsec.Combinator.notFollowedBy'.
 
-unexpected :: (
-#if MIN_VERSION_base(4,16,0)
-    Total m,
-#endif
-  Stream s m t) => String -> ParsecT s u m a
+unexpected :: (Stream s m t) => String -> ParsecT s u m a
 unexpected msg
     = ParsecT $ \s _ _ _ eerr ->
       eerr $ newErrorMessage (UnExpect msg) (statePos s)
@@ -154,7 +150,7 @@ unexpected msg
 
 data ParsecT s u m a
     = ParsecT {unParser :: forall b .
-                State s u
+                 State s u
               -> (a -> State s u -> ParseError -> m b) -- consumed ok
               -> (ParseError -> m b)                   -- consumed err
               -> (a -> State s u -> ParseError -> m b) -- empty ok
@@ -169,7 +165,11 @@ data ParsecT s u m a
 
 -- | Low-level unpacking of the ParsecT type. To run your parser, please look to
 -- runPT, runP, runParserT, runParser and other such functions.
-runParsecT :: Monad m => ParsecT s u m a -> State s u -> m (Consumed (m (Reply s u a)))
+runParsecT :: (
+#if MIN_VERSION_base(4,16,0)
+                Total m, 
+#endif
+                Monad m) => ParsecT s u m a -> State s u -> m (Consumed (m (Reply s u a)))
 {-# INLINABLE runParsecT #-}
 runParsecT p s = unParser p s cok cerr eok eerr
     where cok a s' err = return . Consumed . return $ Ok a s' err
@@ -180,9 +180,9 @@ runParsecT p s = unParser p s cok cerr eok eerr
 -- | Low-level creation of the ParsecT type. You really shouldn't have to do this.
 mkPT :: (
 #if MIN_VERSION_base(4,16,0)
-        Total m,
+         Total m, 
 #endif
-        Monad m) => (State s u -> m (Consumed (m (Reply s u a)))) -> ParsecT s u m a
+         Monad m) => (State s u -> m (Consumed (m (Reply s u a)))) -> ParsecT s u m a
 {-# INLINABLE mkPT #-}
 mkPT k = ParsecT $ \s cok cerr eok eerr -> do
            cons <- k s
@@ -277,21 +277,13 @@ instance Functor (Reply s u) where
     fmap f (Ok x s e) = Ok (f x) s e
     fmap _ (Error e) = Error e -- XXX
 
-instance
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-  Functor (ParsecT s u m) where
+instance Functor (ParsecT s u m) where
     fmap f p = parsecMap f p
 
-parsecMap ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-  (a -> b) -> ParsecT s u m a -> ParsecT s u m b
-parsecMap f p
+parsecMap :: (a -> b) -> ParsecT s u m a -> ParsecT s u m b
+parsecMap f (ParsecT p)
     = ParsecT $ \s cok cerr eok eerr ->
-      unParser p s (cok . f) cerr (eok . f) eerr
+       p s (cok . f) cerr (eok . f) eerr
 
 instance
 #if MIN_VERSION_base(4,16,0)
@@ -377,11 +369,7 @@ instance (
         runParsecT p s `catchError` \e ->
             runParsecT (h e) s
 
-parserReturn ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-      a -> ParsecT s u m a
+parserReturn :: a -> ParsecT s u m a
 parserReturn x
     = ParsecT $ \s _ _ eok _ ->
       eok x s (unknownError s)
@@ -529,27 +517,19 @@ p <?> msg = label p msg
 p1 <|> p2 = mplus p1 p2
 
 -- | A synonym for @\<?>@, but as a function instead of an operator.
-label ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-  ParsecT s u m a -> String -> ParsecT s u m a
+label :: ParsecT s u m a -> String -> ParsecT s u m a
 label p msg
   = labels p [msg]
 
-labels ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-  ParsecT s u m a -> [String] -> ParsecT s u m a
-labels p msgs =
+labels :: ParsecT s u m a -> [String] -> ParsecT s u m a
+labels (ParsecT p) msgs =
     ParsecT $ \s cok cerr eok eerr ->
     let eok' x s' error = eok x s' $ if errorIsUnknown error
                   then error
                   else setExpectErrors error msgs
         eerr' err = eerr $ setExpectErrors err msgs
 
-    in unParser p s cok cerr eok' eerr'
+    in p s cok cerr eok' eerr'
 
  where
    setExpectErrors err []         = setErrorMessage (Expect "") err
@@ -664,29 +644,21 @@ tokens showTokens nextposs tts@(tok:toks)
 -- >  letExpr     = do{ try (string "let"); ... }
 -- >  identifier  = many1 letter
 
-try ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-  ParsecT s u m a -> ParsecT s u m a
-try p =
+try :: ParsecT s u m a -> ParsecT s u m a
+try (ParsecT p) =
     ParsecT $ \s cok _ eok eerr ->
-    unParser p s cok eerr eok eerr
+    p s cok eerr eok eerr
 
 -- | @lookAhead p@ parses @p@ without consuming any input.
 --
 -- If @p@ fails and consumes some input, so does @lookAhead@. Combine with 'try'
 -- if this is undesirable.
 
-lookAhead ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-  (Stream s m t) => ParsecT s u m a -> ParsecT s u m a
-lookAhead p =
+lookAhead :: (Stream s m t) => ParsecT s u m a -> ParsecT s u m a
+lookAhead (ParsecT p) =
     ParsecT $ \s _ cerr eok eerr -> do
         let eok' a _ _ = eok a s (newErrorUnknown (statePos s))
-        unParser p s eok' cerr eok' eerr
+        p s eok' cerr eok' eerr
 
 -- | The parser @token showTok posFromTok testTok@ accepts a token @t@
 -- with result @x@ when the function @testTok t@ returns @'Just' x@. The
@@ -811,29 +783,25 @@ many p
 
 skipMany ::
 #if MIN_VERSION_base(4,16,0)
-    Total m =>
+  (Total m) => 
 #endif
-    ParsecT s u m a -> ParsecT s u m ()
+  ParsecT s u m a -> ParsecT s u m ()
 skipMany p
   = do _ <- manyAccum (\_ _ -> []) p
        return ()
 
-manyAccum ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-          (a -> [a] -> [a])
+manyAccum :: (a -> [a] -> [a])
           -> ParsecT s u m a
           -> ParsecT s u m [a]
-manyAccum acc p =
+manyAccum acc (ParsecT p) =
     ParsecT $ \s cok cerr eok _eerr ->
     let walk xs x s' _err =
-            unParser p s'
+            p s'
               (seq xs $ walk $ acc x xs)  -- consumed-ok
               cerr                        -- consumed-err
               manyErr                     -- empty-ok
               (\e -> cok (acc x xs) s' e) -- empty-err
-    in unParser p s (walk []) cerr manyErr (\e -> eok [] s e)
+    in p s (walk []) cerr manyErr (\e -> eok [] s e)
 
 manyErr :: a
 manyErr = error "Text.ParserCombinators.Parsec.Prim.many: combinator 'many' is applied to a parser that accepts an empty string."
