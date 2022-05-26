@@ -424,11 +424,7 @@ mergeErrorReply err1 reply -- XXX where to put it?
         Ok x state err2 -> Ok x state (mergeError err1 err2)
         Error err2      -> Error (mergeError err1 err2)
 
-parserFail ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-     String -> ParsecT s u m a
+parserFail :: String -> ParsecT s u m a
 parserFail msg
     = ParsecT $ \s _ _ _ eerr ->
       eerr $ newErrorMessage (Message msg) (statePos s)
@@ -445,30 +441,22 @@ instance
 -- equal to the 'mzero' member of the 'MonadPlus' class and to the 'Control.Applicative.empty' member
 -- of the 'Control.Applicative.Alternative' class.
 
-parserZero ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-     ParsecT s u m a
+parserZero :: ParsecT s u m a
 parserZero
     = ParsecT $ \s _ _ _ eerr ->
       eerr $ unknownError s
 
-parserPlus ::
-#if MIN_VERSION_base(4,16,0)
-    Total m => 
-#endif
-  ParsecT s u m a -> ParsecT s u m a -> ParsecT s u m a
+parserPlus :: ParsecT s u m a -> ParsecT s u m a -> ParsecT s u m a
 {-# INLINE parserPlus #-}
-parserPlus m n
+parserPlus (ParsecT m) (ParsecT n)
     = ParsecT $ \s cok cerr eok eerr ->
       let
           meerr err =
               let
                   neok y s' err' = eok y s' (mergeError err err')
                   neerr err' = eerr $ mergeError err err'
-              in unParser n s cok cerr neok neerr
-      in unParser m s cok cerr eok meerr
+              in n s cok cerr neok neerr
+      in m s cok cerr eok meerr
 
 instance MonadTrans (ParsecT s u) where
     lift amb = ParsecT $ \s _ _ eok _ -> do
