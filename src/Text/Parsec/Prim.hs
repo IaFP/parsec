@@ -653,11 +653,7 @@ token showToken tokpos test = tokenPrim showToken nextpos test
 -- >      testChar x        = if x == c then Just x else Nothing
 -- >      nextPos pos x xs  = updatePosChar pos x
 
-tokenPrim :: (
-#if MIN_VERSION_base(4,16,0)
-             m @ Maybe (t, s), 
-#endif
-             Stream s m t)
+tokenPrim :: (Stream s m t)
           => (t -> String)                      -- ^ Token pretty-printing function.
           -> (SourcePos -> t -> s -> SourcePos) -- ^ Next position calculating function.
           -> (t -> Maybe a)                     -- ^ Matching function for the token to parse.
