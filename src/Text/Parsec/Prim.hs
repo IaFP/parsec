@@ -150,9 +150,6 @@ unexpected msg
 
 data ParsecT s u m a
     = ParsecT {unParser :: forall b .
-#if MIN_VERSION_base(4,16,0)
-                m @ b =>
-#endif
                  State s u
               -> (a -> State s u -> ParseError -> m b) -- consumed ok
               -> (ParseError -> m b)                   -- consumed err
